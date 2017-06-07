@@ -76,6 +76,10 @@ struct lock {
         char *lk_name;
         // add what you need here
         // (don't forget to mark things volatile as needed)
+        bool held;
+        struct spinlock lk_spin;
+        struct wchan *lk_wchan;
+        volatile struct thread *owner;
 };
 
 struct lock *lock_create(const char *name);
@@ -114,6 +118,7 @@ void lock_destroy(struct lock *);
 struct cv {
         char *cv_name;
         // add what you need here
+        struct wchan *cv_wchan;
         // (don't forget to mark things volatile as needed)
 };
 
