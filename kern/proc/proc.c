@@ -49,7 +49,13 @@
 #include <vnode.h>
 #include <vfs.h>
 #include <synch.h>
-#include <kern/fcntl.h>  
+#include <kern/fcntl.h>
+#include "opt-A2.h"
+
+#if OPT_A2
+#include <array.h>
+#include <limits.h>
+#endif
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -69,7 +75,34 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
+#if OPT_A2
+struct array *allProcs;
+struct lock *allProcsLock;
+struct lock *procLock;
+struct array *reusablePids;
+struct cv *cvWait;
+static volatile pid_t pidCounter = PID_MIN;
+#endif
 
+#if OPT_A2
+/* Generator for Pid */
+pid_t pid_generate(void) {
+	if (pidCounter <= PID_MAX) {
+		return ++pidCounter;
+	}
+	else {
+		pid_t *r;
+		if (array_num(reusablePids) == 0) {
+			r = PROC_NULL_PID;
+		}
+		else {
+			r = array_get(reusablePids,0);
+			array_remove(reusablePids,0);
+		}
+		return *r;
+	}
+}
+#endif
 
 /*
  * Create a proc structure.
@@ -92,6 +125,13 @@ proc_create(const char *name)
 
 	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
+
+#if OPT_A2
+	proc->p_id = PROC_NULL_PID;
+	proc->p_pid = PROC_NULL_PID;
+	proc->p_state = PROC_RUNNING;
+	proc->p_exitcode = 0;
+#endif
 
 	/* VM fields */
 	proc->p_addrspace = NULL;
@@ -208,6 +248,24 @@ proc_bootstrap(void)
     panic("could not create no_proc_sem semaphore\n");
   }
 #endif // UW 
+
+#if OPT_A2
+  kproc->p_id = 1;
+  // Create array to store all procs and initialize
+  allProcs = array_create();
+  array_init(allProcs);
+  // Create lock for allProcs
+  allProcsLock = lock_create("allProcsLock");
+  if (allProcsLock == NULL) panic("failed to create allProcsLock\n");
+  // Create lock for proc
+  procLock = lock_create("procLock");
+  if (procLock == NULL) panic("failed to create procLock\n");
+  // Create array for reusable pids
+  reusablePids = array_create();
+  array_init(reusablePids);
+  // Create cv
+  cvWait = cv_create("cvWait");
+#endif
 }
 
 /*
@@ -226,6 +284,26 @@ proc_create_runprogram(const char *name)
 	if (proc == NULL) {
 		return NULL;
 	}
+
+#if OPT_A2
+	int result;
+
+	lock_acquire(procLock);
+	proc->p_id = pid_generate();
+	lock_release(procLock);
+
+	if (proc->p_id != PROC_NULL_PID) {
+		lock_acquire(allProcsLock);
+		result = array_add(allProcs,proc,NULL);
+		if(result){
+			panic("destroy proc due to failure to add proc to allProcs\n");
+			proc_destroy(proc);
+			lock_release(allProcsLock);
+			return NULL;
+		}
+		lock_release(allProcsLock);
+	}
+#endif
 
 #ifdef UW
 	/* open the console - this should always succeed */
