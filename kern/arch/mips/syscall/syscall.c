@@ -179,7 +179,7 @@ syscall(struct trapframe *tf)
  *
  * Thus, you can trash it and do things another way if you prefer.
  */
-
+#if OPT_A2
 void enter_forked_process(void *tf, unsigned long data2) {
 	/* Child thread needs to put the trapframe onto its stack and
 	 * modify it so that it returns the current value
@@ -202,3 +202,10 @@ void enter_forked_process(void *tf, unsigned long data2) {
 	
 	mips_usermode(&stf);
 }
+#else
+void
+enter_forked_process(struct trapframe *tf)
+{
+	(void)tf;
+}
+#endif
