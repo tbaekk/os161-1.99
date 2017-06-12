@@ -148,7 +148,7 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
 
 
   // Assign PID to child process and create the parent/child relationship
-  child->p_pid = parent->p_id;
+  childProc->p_pid = parent->p_id;
   DEBUG(DB_SYSCALL, "sys_fork: Created parent/child relationship.\n");
 
 
