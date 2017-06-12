@@ -103,8 +103,10 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   int result;
 
   // Create process structure for child process
-  struct proc *parentProc = curproc;
-  struct proc *childProc  = proc_create_runprogram(parentProc->p_name);
+  struct proc *parentProc;
+  parentProc = curproc;
+  struct proc *childProc;
+  childProc = proc_create_runprogram(parentProc->p_name);
   if (childProc == NULL) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create new process.\n");
     return ENPROC;
@@ -113,16 +115,18 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to assign pid.\n");
     return ENOMEM;
   }
-  DEBUG(DB_SYSCALL, "sys_fork: Created new process.\n")
+  DEBUG(DB_SYSCALL, "sys_fork: Created new process.\n");
 
 
   // Create and copy address space (and data) from parent to child
-  struct addrspace *parentAddrs = curproc_getas();
+  struct addrspace *parentAddrs;
+  parentAddrs = curproc_getas();
   if (parentAddrs == NULL) {
     DEBUG(DB_SYSCALL, "sys_fork: No address space setup.\n");
     return EFAULT;
   }
-  struct addrspace *childAddrs = as_create();
+  struct addrspace *childAddrs;
+  childAddrs = as_create();
   if (childAddrs == NULL) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create addrspace for new process.\n");
     as_destroy(childAddrs);
@@ -145,14 +149,15 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
 
   // Assign PID to child process and create the parent/child relationship
   child->p_pid = parent->p_id;
-  DEBUG(DB_SYSCALL, "sys_fork: Created parent/child relationship.\n")
+  DEBUG(DB_SYSCALL, "sys_fork: Created parent/child relationship.\n");
 
 
   /* Create thread for child process.
    * Child thread needs to put the trapframe onto its stack and
    * modify it so that it returns the current value.
    */
-  struct trapframe *ctf = kmalloc(sizeof(struct trapframe));
+  struct trapframe *ctf;
+  ctf = kmalloc(sizeof(struct trapframe));
   if (ctf == NULL) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create trapframe for new process.\n");
     proc_destroy(childProc);

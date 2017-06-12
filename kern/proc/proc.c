@@ -91,7 +91,7 @@ pid_t pid_generate(void) {
 	else {
 		pid_t *r;
 		if (array_num(reusablePids) == 0) {
-			r = PROC_NULL_PID;
+			*r = PROC_NULL_PID;
 		}
 		else {
 			r = array_get(reusablePids,0);
