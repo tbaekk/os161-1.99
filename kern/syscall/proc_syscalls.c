@@ -87,12 +87,12 @@ sys_waitpid(pid_t pid,
   struct proc *parentProc;
   struct proc *childProc;
 
-  lock_acquire(procTableLock);
+  lock_acquire(allProcsLock);
   childProc = proc_get_from_table_bypid(pid);
 
   if (childProc == NULL) {
     DEBUG(DB_SYSCALL, "sys_waitpid: Failed to fetch child process.\n");
-    lock_release(procTableLock);
+    lock_release(allProcsLock);
     return ESRCH;
   }
 
@@ -110,11 +110,11 @@ sys_waitpid(pid_t pid,
 
 #if OPT_A2
   while(childProc->p_state == PROC_RUNNING) {
-    cv_wait(cvWait, procTableLock);
+    cv_wait(cvWait, allProcsLock);
   }
 
   exitstatus = childProc->p_exitcode;
-  lock_release(procTableLock);  
+  lock_release(allProcsLock);  
 #else
   /* for now, just pretend the exitstatus is 0 */
   exitstatus = 0;
