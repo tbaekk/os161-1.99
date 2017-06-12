@@ -82,12 +82,43 @@ sys_waitpid(pid_t pid,
 
      Fix this!
   */
+#if OPT_A2
+  struct proc *parentProc;
+  struct proc *childProc;
+
+  lock_aquire(procTableLock);
+  childProc = proc_get_from_table_bypid(pid);
+
+  if (childProc == NULL) {
+    DEBUG(DB_SYSCALL, "sys_waitpid: Failed to fetch child process.\n");
+    lock_release(procTableLock);
+    return ESRCH;
+  }
+
+  parentProc = curproc;
+
+  if (parentProc->p_id != childProc->p_pid) {
+    DEBUG(DB_SYSCALL, "sys_waitpid: No related child process.\n");
+    return ECHILD;
+  }
+#endif
 
   if (options != 0) {
     return(EINVAL);
   }
+
+#if OPT_A2
+  while(childProc->p_state == PROC_RUNNING) {
+    cv_wait(cvWait, procTableLock);
+  }
+
+  exitstatus = childProc->p_exitcode;
+  lock_release(procTableLock);  
+#else
   /* for now, just pretend the exitstatus is 0 */
   exitstatus = 0;
+#endif
+
   result = copyout((void *)&exitstatus,status,sizeof(int));
   if (result) {
     return(result);

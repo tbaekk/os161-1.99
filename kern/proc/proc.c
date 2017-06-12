@@ -440,3 +440,22 @@ curproc_setas(struct addrspace *newas)
 	spinlock_release(&proc->p_lock);
 	return oldas;
 }
+
+
+/*
+ *	Helper methods added for A2a
+ */
+#if OPT_A2
+
+/* Return the proc from procTable by pid */
+struct proc *proc_get_from_table_bypid(pid_t pid) {
+	struct proc *tmp;
+	for (unsigned int i=0; i<array_num(procTable); i++) {
+		tmp = array_get(procTable,i);
+		if (tmp->p_id == pid) {
+			return tmp;
+		}
+	}
+	return NULL;
+}
+#endif
