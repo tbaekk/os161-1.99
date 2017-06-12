@@ -144,11 +144,11 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   spinlock_acquire(&childProc->p_lock);
   childProc->p_addrspace = childAddrs;
   spinlock_release(&childProc->p_lock);
-  DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n")
+  DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n");
 
 
   // Assign PID to child process and create the parent/child relationship
-  childProc->p_pid = parent->p_id;
+  childProc->p_pid = parentProc->p_id;
   DEBUG(DB_SYSCALL, "sys_fork: Created parent/child relationship.\n");
 
 
