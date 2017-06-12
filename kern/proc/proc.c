@@ -82,9 +82,7 @@ struct lock *procLock;
 struct array *reusablePids;
 struct cv *cvWait;
 static volatile pid_t pidCounter = PID_MIN;
-#endif
 
-#if OPT_A2
 /* Generator for Pid */
 pid_t pid_generate(void) {
 	if (pidCounter <= PID_MAX) {
