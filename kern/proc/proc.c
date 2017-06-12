@@ -81,10 +81,10 @@ struct lock *allProcsLock;
 struct lock *procLock;
 struct array *reusablePids;
 struct cv *cvWait;
-static volatile pid_t pidCounter = PID_MIN;
+static volatile pid_t pidCounter;
 
 /* Generator for Pid */
-pid_t pid_generate(void) {
+static pid_t pid_generate(void) {
 	if (pidCounter <= PID_MAX) {
 		return ++pidCounter;
 	}
@@ -249,15 +249,20 @@ proc_bootstrap(void)
 
 #if OPT_A2
   kproc->p_id = 1;
+  pidCounter = PID_MIN;
   // Create array to store all procs and initialize
   allProcs = array_create();
   array_init(allProcs);
   // Create lock for allProcs
   allProcsLock = lock_create("allProcsLock");
-  if (allProcsLock == NULL) panic("failed to create allProcsLock\n");
+  if (allProcsLock == NULL) { 
+  	panic("failed to create allProcsLock\n");
+  }
   // Create lock for proc
   procLock = lock_create("procLock");
-  if (procLock == NULL) panic("failed to create procLock\n");
+  if (procLock == NULL) {
+  	panic("failed to create procLock\n");
+  }
   // Create array for reusable pids
   reusablePids = array_create();
   array_init(reusablePids);
