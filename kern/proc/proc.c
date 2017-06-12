@@ -75,16 +75,17 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
+pid_t pidCounter = PID_MIN;
+
 #if OPT_A2
-struct array *allProcs;
-struct lock *allProcsLock;
-struct lock *procLock;
+struct array *procTable;
+struct lock *procTableLock;
+struct lock *pidLock;
 struct array *reusablePids;
 struct cv *cvWait;
-static volatile pid_t pidCounter;
 
 /* Generator for Pid */
-static pid_t pid_generate(void) {
+pid_t pid_generate(void) {
 	if (pidCounter <= PID_MAX) {
 		return ++pidCounter;
 	}
@@ -207,6 +208,12 @@ proc_destroy(struct proc *proc)
 	kfree(proc->p_name);
 	kfree(proc);
 
+#if OPT_A2
+	if (proc->p_id != PROC_NULL_PID) {
+
+	}
+#endif // OPT_A2
+
 #ifdef UW
 	/* decrement the process count */
         /* note: kproc is not included in the process count, but proc_destroy
@@ -249,19 +256,18 @@ proc_bootstrap(void)
 
 #if OPT_A2
   kproc->p_id = 1;
-  pidCounter = PID_MIN;
   // Create array to store all procs and initialize
-  allProcs = array_create();
-  array_init(allProcs);
-  // Create lock for allProcs
-  allProcsLock = lock_create("allProcsLock");
-  if (allProcsLock == NULL) { 
-  	panic("failed to create allProcsLock\n");
+  procTable = array_create();
+  array_init(procTable);
+  // Create lock for procTable
+  procTableLock = lock_create("procTableLock");
+  if (procTableLock == NULL) { 
+  	panic("failed to create procTableLock\n");
   }
   // Create lock for proc
-  procLock = lock_create("procLock");
-  if (procLock == NULL) {
-  	panic("failed to create procLock\n");
+  pidLock = lock_create("pidLock");
+  if (pidLock == NULL) {
+  	panic("failed to create pidLock\n");
   }
   // Create array for reusable pids
   reusablePids = array_create();
@@ -287,26 +293,6 @@ proc_create_runprogram(const char *name)
 	if (proc == NULL) {
 		return NULL;
 	}
-
-#if OPT_A2
-	int result;
-
-	lock_acquire(procLock);
-	proc->p_id = pid_generate();
-	lock_release(procLock);
-
-	if (proc->p_id != PROC_NULL_PID) {
-		lock_acquire(allProcsLock);
-		result = array_add(allProcs,proc,NULL);
-		if(result){
-			panic("destroy proc due to failure to add proc to allProcs\n");
-			proc_destroy(proc);
-			lock_release(allProcsLock);
-			return NULL;
-		}
-		lock_release(allProcsLock);
-	}
-#endif
 
 #ifdef UW
 	/* open the console - this should always succeed */
@@ -342,6 +328,26 @@ proc_create_runprogram(const char *name)
 	}
 	spinlock_release(&curproc->p_lock);
 #endif // UW
+
+#if OPT_A2
+	int result;
+
+	lock_acquire(pidLock);
+	proc->p_id = pid_generate();
+	lock_release(pidLock);
+
+	if (proc->p_id != PROC_NULL_PID) {
+		lock_acquire(procTableLock);
+		result = array_add(procTable,proc,NULL);
+		// if(result){
+		// 	panic("destroy proc due to failure to add proc to procTable\n");
+		// 	proc_destroy(proc);
+		// 	lock_release(procTableLock);
+		// 	return NULL;
+		// }
+		lock_release(procTableLock);
+	}
+#endif // OPT_A2
 
 #ifdef UW
 	/* increment the count of processes */

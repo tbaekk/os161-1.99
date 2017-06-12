@@ -89,9 +89,9 @@ struct proc {
 };
 
 #if OPT_A2
-extern struct array *allProcs;
-extern struct lock *allProcsLock;
-extern struct lock *procLock;
+extern struct array *procTable;
+extern struct lock *procTableLock;
+extern struct lock *pidLock;
 extern struct array *reusablePids;
 extern struct cv *cvWait;
 #endif
