@@ -198,12 +198,12 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   memcpy(ptf,ctf, sizeof(struct trapframe));
   DEBUG(DB_SYSCALL, "sys_fork: Created new trapframe\n");
 
-  result = thread_fork(curthread->t_name,childProc,enter_forked_process,ctf,1);
+  result = thread_fork(curthread->t_name, childProc, enter_forked_process, ctf, 1);
   if (result) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create new thread from thread_fork\n");
+    proc_destroy(childProc);
     kfree(ctf);
     ctf = NULL;
-    proc_destroy(childProc);
     return result;
   }
   DEBUG(DB_SYSCALL, "sys_fork: Created new fork thread\n");

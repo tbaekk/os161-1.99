@@ -186,9 +186,10 @@ void enter_forked_process(void *tf, unsigned long data2) {
 	 */
 	int32_t retval;
 	struct trapframe *ctf = tf;
-	(void) data2;
-
 	struct trapframe stf = *ctf;
+	
+	(void) data2;
+	
 	retval = 0;
 
 	stf.tf_v0 = retval;
@@ -197,7 +198,9 @@ void enter_forked_process(void *tf, unsigned long data2) {
 
 	kfree(ctf);
 
+	/* Make sure the syscall code didn't forget to lower spl */
 	KASSERT(curthread->t_curspl == 0);
+	/* ...or leak any spinlocks */
 	KASSERT(curthread->t_iplhigh_count == 0);
 	
 	mips_usermode(&stf);

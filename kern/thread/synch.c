@@ -236,6 +236,8 @@ bool
 lock_do_i_hold(struct lock *lock)
 {
     // Write this
+    KASSERT(lock != NULL);
+    KASSERT(curthread != NULL);
 
     //(void)lock;  // suppress warning until code gets written
 
