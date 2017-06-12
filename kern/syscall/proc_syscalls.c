@@ -136,14 +136,14 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   result = as_copy(parentAddrs, &childAddrs);
   if (result) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to copy addrspace to new process.\n");
-    proc_destroy(newProc);
+    proc_destroy(childProc);
     return ENOMEM;
   }
 
   // Attach the newly created address space to the child process structure
-  spinlock_acquire(&child->p_lock);
-  childAddrs->p_addrspace = childAddrs;
-  spinlock_release(&child->p_lock);
+  spinlock_acquire(&childProc->p_lock);
+  childProc->p_addrspace = childAddrs;
+  spinlock_release(&childProc->p_lock);
   DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n")
 
 
@@ -166,7 +166,7 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   memcpy(ptf,ctf, sizeof(struct trapframe));
   DEBUG(DB_SYSCALL, "sys_fork: Created new trapframe\n");
 
-  result = thread_fork(curthread->t_name,childProc,&enter_forked_process,ctf,1);
+  result = thread_fork(curthread->t_name,childProc,enter_forked_process,ctf,1);
   if (result) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create new thread from thread_fork\n");
     kfree(ctf);
