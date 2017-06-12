@@ -9,6 +9,7 @@
 #include <thread.h>
 #include <addrspace.h>
 #include <copyinout.h>
+#include <synch.h>
 #include "opt-A2.h"
 
 #if OPT_A2
@@ -86,7 +87,7 @@ sys_waitpid(pid_t pid,
   struct proc *parentProc;
   struct proc *childProc;
 
-  lock_aquire(procTableLock);
+  lock_acquire(procTableLock);
   childProc = proc_get_from_table_bypid(pid);
 
   if (childProc == NULL) {

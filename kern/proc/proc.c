@@ -447,11 +447,11 @@ curproc_setas(struct addrspace *newas)
  */
 #if OPT_A2
 
-/* Return the proc from procTable by pid */
+/* Return the proc from allProcs by pid */
 struct proc *proc_get_from_table_bypid(pid_t pid) {
 	struct proc *tmp;
-	for (unsigned int i=0; i<array_num(procTable); i++) {
-		tmp = array_get(procTable,i);
+	for (unsigned int i=0; i<array_num(allProcs); i++) {
+		tmp = array_get(allProcs,i);
 		if (tmp->p_id == pid) {
 			return tmp;
 		}
