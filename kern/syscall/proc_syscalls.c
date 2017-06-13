@@ -24,27 +24,13 @@ void sys__exit(int exitcode) {
   struct proc *p = curproc;
   /* for now, just include this to keep the compiler from complaining about
      an unused variable */
+#if OPT_A2
+
+#else
   (void)exitcode;
+#endif
 
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
-
-#if OPT_A2
-  lock_acquire(pidLock);
-   p->p_state = PROC_ZOMBIE;
-   p->p_exitcode = _MKWAIT_EXIT(exitcode);
-   cv_broadcast(cvWait, pidLock);
-  lock_release(pidLock);
-
-  lock_acquire(procTableLock);
-   if (p->p_pid != PROC_NULL_PID) {
-    // Wait until parent process is finished
-    struct proc *par = proc_get_from_table_bypid(p->p_pid);
-    while (par->p_state == PROC_RUNNING) {
-      cv_wait(cvWait, procTableLock);
-    }
-   }
-  lock_release(procTableLock);
-#endif
 
   KASSERT(curproc->p_addrspace != NULL);
   as_deactivate();
@@ -61,6 +47,25 @@ void sys__exit(int exitcode) {
   /* detach this thread from its process */
   /* note: curproc cannot be used after this call */
   proc_remthread(curthread);
+
+#if OPT_A2
+  lock_acquire(pidLock);
+   p->p_state = PROC_ZOMBIE;
+   p->p_exitcode = _MKWAIT_EXIT(exitcode);
+   cv_broadcast(p->p_cv, pidLock);
+  lock_release(pidLock);
+
+  if (p->p_pid != PROC_NULL_PID) {
+    lock_acquire(procTableLock);
+    // Wait until parent process is finished
+    struct proc *par = proc_get_from_table_bypid(p->p_pid);
+    while (par->p_state == PROC_RUNNING) {
+      cv_wait(par->p_cv, procTableLock);
+    }
+    lock_release(procTableLock);
+  }
+  
+#endif
 
   /* if this is the last user process in the system, proc_destroy()
      will wake up the kernel menu thread */
@@ -133,7 +138,7 @@ sys_waitpid(pid_t pid,
 
 #if OPT_A2
   while(childProc->p_state == PROC_RUNNING) {
-    cv_wait(cvWait, procTableLock);
+    cv_wait(childProc->p_cv, procTableLock);
   }
 
   exitstatus = childProc->p_exitcode;

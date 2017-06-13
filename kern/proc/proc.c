@@ -82,7 +82,7 @@ struct array *procTable;
 struct lock *procTableLock;
 struct lock *pidLock;
 struct array *reusablePids;
-struct cv *cvWait;
+//struct cv *cvWait;
 
 /* Generator for Pid */
 pid_t pid_generate(void) {
@@ -130,6 +130,7 @@ proc_create(const char *name)
 	proc->p_pid = PROC_NULL_PID;
 	proc->p_state = PROC_RUNNING;
 	proc->p_exitcode = 0;
+	proc->p_cv = NULL;
 #endif
 
 	/* VM fields */
@@ -217,7 +218,10 @@ proc_destroy(struct proc *proc)
 	lock_acquire(pidLock);
 	 array_add(reusablePids,&proc->p_id,NULL);
 	lock_release(pidLock);
+	
 	proc->p_state = PROC_UNUSED_PID;
+	cv_destroy(proc->p_cv);
+	proc->p_cv = NULL;
 #endif // OPT_A2
 
 #ifdef UW
@@ -279,10 +283,10 @@ proc_bootstrap(void)
   reusablePids = array_create();
   array_init(reusablePids);
   // Create cv
-  cvWait = cv_create("cvWait");
-  if (cvWait == NULL) {
-  	panic("failed to create cvWait\n");
-  }
+  // cvWait = cv_create("cvWait");
+  // if (cvWait == NULL) {
+  // 	panic("failed to create cvWait\n");
+  // }
 #endif
 }
 
@@ -342,6 +346,14 @@ proc_create_runprogram(const char *name)
 	lock_acquire(pidLock);
 	 proc->p_id = pid_generate();
 	lock_release(pidLock);
+
+	struct cv *cvWait = cv_create("cvWait");
+	if (cvWait == NULL) {
+		panic("failed to create cv for proc");
+		proc_destroy(proc);
+		return NULL;
+	}
+	proc->p_cv = cvWait;
 
 	if (proc->p_id != PROC_NULL_PID) {
 		lock_acquire(procTableLock);

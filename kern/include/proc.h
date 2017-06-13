@@ -86,6 +86,7 @@ struct proc {
 	pid_t p_pid;
 	int p_state;
 	int p_exitcode;
+	struct cv* p_cv;
 #endif
 };
 
@@ -94,7 +95,7 @@ extern struct array *procTable;
 extern struct lock *procTableLock;
 extern struct lock *pidLock;
 extern struct array *reusablePids;
-extern struct cv *cvWait;
+//extern struct cv *cvWait;
 #endif
 
 /* This is the process structure for the kernel and for kernel-only threads. */
