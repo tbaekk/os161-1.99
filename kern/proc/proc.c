@@ -274,6 +274,9 @@ proc_bootstrap(void)
   array_init(reusablePids);
   // Create cv
   cvWait = cv_create("cvWait");
+  if (cvWait == NULL) {
+  	panic("failed to create cvWait\n");
+  }
 #endif
 }
 
@@ -330,15 +333,13 @@ proc_create_runprogram(const char *name)
 #endif // UW
 
 #if OPT_A2
-	int result;
-
 	lock_acquire(pidLock);
 	proc->p_id = pid_generate();
 	lock_release(pidLock);
 
 	if (proc->p_id != PROC_NULL_PID) {
 		lock_acquire(procTableLock);
-		result = array_add(procTable,proc,NULL);
+		array_add(procTable,proc,NULL);
 		// if(result){
 		// 	panic("destroy proc due to failure to add proc to procTable\n");
 		// 	proc_destroy(proc);
@@ -458,11 +459,11 @@ curproc_setas(struct addrspace *newas)
  */
 #if OPT_A2
 
-/* Return the proc from allProcs by pid */
+/* Return the proc from procTable by pid */
 struct proc *proc_get_from_table_bypid(pid_t pid) {
 	struct proc *tmp;
-	for (unsigned int i=0; i<array_num(allProcs); i++) {
-		tmp = array_get(allProcs,i);
+	for (unsigned int i=0; i<array_num(procTable); i++) {
+		tmp = array_get(procTable,i);
 		if (tmp->p_id == pid) {
 			return tmp;
 		}

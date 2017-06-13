@@ -89,6 +89,7 @@ sys_waitpid(pid_t pid,
   }
 
 #if OPT_A2
+  /*
   struct proc *parentProc;
   struct proc *childProc;
 
@@ -113,7 +114,7 @@ sys_waitpid(pid_t pid,
   }
 
   exitstatus = childProc->p_exitcode;
-  lock_release(procTableLock);  
+  lock_release(procTableLock);  */
 #else
   /* for now, just pretend the exitstatus is 0 */
   exitstatus = 0;
@@ -134,27 +135,44 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   int result;
 
   // Create process structure for child process
-  struct proc *parentProc = curproc;
+  struct proc *parentProc= curproc;
   struct proc *childProc = proc_create_runprogram(parentProc->p_name);
   if (childProc == NULL) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create new process.\n");
-    return ENPROC;
+    return ENOMEM;
   }
   if (childProc->p_id == PROC_NULL_PID) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to assign pid.\n");
-    return ENOMEM;
+    return ENPROC;
   }
   DEBUG(DB_SYSCALL, "sys_fork: Created new process.\n");
 
 
   // Create and copy address space (and data) from parent to child
-  // Attach the newly created address space to the child process structure
-  as_copy(curproc_getas(), &(childProc->p_addrspace));
-  if (childProc->p_addrspace == NULL) {
-    DEBUG(DB_SYSCALL, "sys_fork: Failed to copy addrspace to new process.\n");
+  struct addrspace *parentAddrs = curproc_getas();
+  if (parentAddrs == NULL) {
+    DEBUG(DB_SYSCALL, "sys_fork: No address space setup.\n");
+    return EFAULT;
+  }
+  struct addrspace *childAddrs = as_create();
+  if (childAddrs == NULL) {
+    DEBUG(DB_SYSCALL, "sys_fork: Failed to create addrspace for new process.\n");
+    as_destroy(childAddrs);
     proc_destroy(childProc);
     return ENOMEM;
   }
+  result = as_copy(parentAddrs, &childAddrs);
+  if (result) {
+    DEBUG(DB_SYSCALL, "sys_fork: Failed to copy addrspace to new process.\n");
+    proc_destroy(childProc);
+    as_destroy(child_as);
+    return ENOMEM;
+  }
+
+  // Attach the newly created address space to the child process structure
+  spinlock_acquire(&childProc->p_lock);
+  childProc->p_addrspace = childAddrs;
+  spinlock_release(&childProc->p_lock);
   DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n");
 
 
@@ -173,10 +191,10 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
     proc_destroy(childProc);
     return ENOMEM;
   }
-  memcpy(ptf, ctf, sizeof(struct trapframe));
+  memcpy(ctf,ptf, sizeof(struct trapframe));
   DEBUG(DB_SYSCALL, "sys_fork: Created new trapframe\n");
 
-  result = thread_fork(curthread->t_name, childProc, enter_forked_process, ctf, 1);
+  result = thread_fork(curthread->t_name, childProc, enter_forked_process, ctf, 0);
   if (result) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create new thread from thread_fork\n");
     proc_destroy(childProc);
