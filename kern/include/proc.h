@@ -41,10 +41,11 @@
 #include "opt-A2.h"
 
 #if OPT_A2
-//#define PROC_EXITED 0
+#define PROC_EXITED 0
 #define PROC_RUNNING 1
 #define PROC_NULL_PID -1
-//#define PROC_ZOMBIE 2
+#define PROC_ZOMBIE 2
+#define PROC_UNUSED_PID 3
 
 struct array;
 struct lock;
@@ -131,6 +132,9 @@ pid_t pid_generate(void);
 
 /* Fetch the process by pid from the procTable */
 struct proc *proc_get_from_table_bypid(pid_t pid);
+
+/* Remove the process by pid from the procTable */
+void proc_remove_bypid(pid_t pid);
 
 #endif /* OPT_A2 */
 

@@ -210,8 +210,14 @@ proc_destroy(struct proc *proc)
 
 #if OPT_A2
 	if (proc->p_id != PROC_NULL_PID) {
-
+		lock_acquire(procTableLock);
+		 proc_remove_from_table_bypid(proc->p_id);
+		lock_release(procTableLock);
 	}
+	lock_acquire(pidLock);
+	 array_add(reusablePids,proc->p_id,NULL);
+	lock_relese(pidLock);
+	proc->p_state = PROC_UNUSED_PID;
 #endif // OPT_A2
 
 #ifdef UW
@@ -470,4 +476,19 @@ struct proc *proc_get_from_table_bypid(pid_t pid) {
 	}
 	return NULL;
 }
+
+/* Remove proc from the procTable by pid */
+void proc_remove_from_table_bypid(pid_t pid) {
+	struct proc *tmp;
+	for (unsigned int i=0; i<array_num(procTable); i++) {
+		tmp = array_get(procTable,i);
+		if (tmp->p_id == pid) {
+			array_remove(procTable,i);
+			break;
+		}
+	}
+	return;
+}
+
+
 #endif
