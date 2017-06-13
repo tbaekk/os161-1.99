@@ -215,8 +215,8 @@ proc_destroy(struct proc *proc)
 		lock_release(procTableLock);
 	}
 	lock_acquire(pidLock);
-	 array_add(reusablePids,proc->p_id,NULL);
-	lock_relese(pidLock);
+	 array_add(reusablePids,&proc->p_id,NULL);
+	lock_release(pidLock);
 	proc->p_state = PROC_UNUSED_PID;
 #endif // OPT_A2
 

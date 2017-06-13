@@ -134,7 +134,7 @@ pid_t pid_generate(void);
 struct proc *proc_get_from_table_bypid(pid_t pid);
 
 /* Remove the process by pid from the procTable */
-void proc_remove_bypid(pid_t pid);
+void proc_remove_from_table_bypid(pid_t pid);
 
 #endif /* OPT_A2 */
 
