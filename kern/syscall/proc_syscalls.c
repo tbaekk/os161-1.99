@@ -21,14 +21,16 @@
 void sys__exit(int exitcode) {
 
   struct addrspace *as;
+
+
   struct proc *p = curproc;
   /* for now, just include this to keep the compiler from complaining about
      an unused variable */
 #if OPT_A2
-
+  // struct proc* child;
 #else
   (void)exitcode;
-#endif
+#endif // OPT_A2
 
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
 
@@ -47,25 +49,28 @@ void sys__exit(int exitcode) {
   /* detach this thread from its process */
   /* note: curproc cannot be used after this call */
   proc_remthread(curthread);
-
 #if OPT_A2
-  lock_acquire(pidLock);
-   p->p_state = PROC_ZOMBIE;
-   p->p_exitcode = _MKWAIT_EXIT(exitcode);
-   cv_broadcast(p->p_cv, pidLock);
-  lock_release(pidLock);
+  // let the parent know that I(child) have exited with the exitcode
+  // exited but not cleaned up - ZOMBIE
+  proc_exitas_zombie(p, exitcode);
 
-  if (p->p_pid != PROC_NULL_PID) {
-    lock_acquire(procTableLock);
-    // Wait until parent process is finished
-    struct proc *par = proc_get_from_table_bypid(p->p_pid);
-    while (par->p_state == PROC_RUNNING) {
-      cv_wait(par->p_cv, procTableLock);
-    }
-    lock_release(procTableLock);
+  // wait for each running child to finish
+  // for (unsigned int i=0; i<array_num(proc_table); ++i){
+  //   child = array_get(proc_table, i);
+  //   if (child->p_parent == p && child->p_state == RUNNING){
+  //     proc_wait_exit(child);
+  //   }
+  // }
+
+  // wait for the parent to finish, if it has parent
+  if (p->p_parentproc){
+    proc_wait_exit(p->p_parentproc);
   }
-  
-#endif
+
+  // Now its pid can be recycled
+  // remove from proc table and add to recyclebin
+  // these are added to proc_destroy
+#endif // OPT_A2
 
   /* if this is the last user process in the system, proc_destroy()
      will wake up the kernel menu thread */
@@ -126,7 +131,7 @@ sys_waitpid(pid_t pid,
 
   parentProc = curproc;
 
-  if (parentProc->p_id != childProc->p_pid) {
+  if (childProc->p_parentproc != parentProc) {
     DEBUG(DB_SYSCALL, "sys_waitpid: No related child process.\n");
     return ECHILD;
   }
@@ -205,7 +210,7 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
 
 
   // Assign PID to child process and create the parent/child relationship
-  childProc->p_pid = parentProc->p_id;
+  childProc->p_parentproc = parentProc;
   DEBUG(DB_SYSCALL, "sys_fork: Assigned parent/child relationship.\n");
 
 

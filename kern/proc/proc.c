@@ -55,6 +55,7 @@
 #if OPT_A2
 #include <array.h>
 #include <limits.h>
+#include <kern/wait.h>
 #endif
 
 /*
@@ -127,10 +128,10 @@ proc_create(const char *name)
 
 #if OPT_A2
 	proc->p_id = PROC_NULL_PID;
-	proc->p_pid = PROC_NULL_PID;
 	proc->p_state = PROC_RUNNING;
 	proc->p_exitcode = 0;
 	proc->p_cv = NULL;
+	proc->p_parentproc = NULL;
 #endif
 
 	/* VM fields */
@@ -496,5 +497,26 @@ void proc_remove_from_table_bypid(pid_t pid) {
 	return;
 }
 
+/* wait while the proc is running */
+void
+proc_wait_exit(struct proc* proc)
+{
+	lock_acquire(pidLock);
+	while(proc->p_state == RUNNING){
+		cv_wait(proc->p_cv, pidLock);
+	}
+	lock_release(pidLock);
+}
+
+/* exit as zombie and let the parent know by broadcasting */
+void
+proc_exitas_zombie(struct proc* p, int exitcode)
+{
+	lock_acquire(pidLock);
+	p->p_state = ZOMBIE;
+	p->p_exitcode = _MKWAIT_EXIT(exitcode);
+	cv_broadcast(p->p_cv,pidLock);
+	lock_release(pidLock);
+}
 
 #endif

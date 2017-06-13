@@ -83,9 +83,9 @@ struct proc {
 	/* add more material here as needed */
 #if OPT_A2
 	pid_t p_id;
-	pid_t p_pid;
 	int p_state;
 	int p_exitcode;
+	struct proc *p_parentproc;
 	struct cv* p_cv;
 #endif
 };
@@ -136,6 +136,11 @@ struct proc *proc_get_from_table_bypid(pid_t pid);
 
 /* Remove the process by pid from the procTable */
 void proc_remove_from_table_bypid(pid_t pid);
+
+void proc_wait_exit(struct proc* proc);
+
+/* exit as zombie and let the parent know by broadcasting */
+void proc_exitas_zombie(struct proc* proc, int exitcode);
 
 #endif /* OPT_A2 */
 
