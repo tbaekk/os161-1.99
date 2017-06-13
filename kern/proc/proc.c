@@ -340,18 +340,12 @@ proc_create_runprogram(const char *name)
 
 #if OPT_A2
 	lock_acquire(pidLock);
-	proc->p_id = pid_generate();
+	 proc->p_id = pid_generate();
 	lock_release(pidLock);
 
 	if (proc->p_id != PROC_NULL_PID) {
 		lock_acquire(procTableLock);
-		array_add(procTable,proc,NULL);
-		// if(result){
-		// 	panic("destroy proc due to failure to add proc to procTable\n");
-		// 	proc_destroy(proc);
-		// 	lock_release(procTableLock);
-		// 	return NULL;
-		// }
+		 array_add(procTable,proc,NULL);
 		lock_release(procTableLock);
 	}
 #endif // OPT_A2

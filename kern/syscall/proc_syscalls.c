@@ -39,7 +39,7 @@ void sys__exit(int exitcode) {
    if (p->p_pid != PROC_NULL_PID) {
     // Wait until parent process is finished
     struct proc *par = proc_get_from_table_bypid(p->p_pid);
-    while (par->p_state = PROC_RUNNING) {
+    while (par->p_state == PROC_RUNNING) {
       cv_wait(cvWait, procTableLock);
     }
    }
@@ -194,7 +194,7 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
 
   // Attach the newly created address space to the child process structure
   spinlock_acquire(&childProc->p_lock);
-  childProc->p_addrspace = childAddrs;
+   childProc->p_addrspace = childAddrs;
   spinlock_release(&childProc->p_lock);
   DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n");
 
