@@ -128,7 +128,7 @@ struct addrspace *curproc_setas(struct addrspace *);
 
 #if OPT_A2
 /* Generator for Pid */
-pid_t pid_generate(void);
+pid_t pid_gen(void);
 
 /* Fetch the process by pid from the procTable */
 struct proc *proc_get_from_table_bypid(pid_t pid);

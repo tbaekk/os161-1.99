@@ -85,7 +85,7 @@ struct array *reusablePids;
 struct cv *cvWait;
 
 /* Generator for Pid */
-pid_t pid_generate(void) {
+pid_t pid_gen(void) {
 	if (pidCounter <= PID_MAX) {
 		return ++pidCounter;
 	}
@@ -214,9 +214,6 @@ proc_destroy(struct proc *proc)
 		 proc_remove_from_table_bypid(proc->p_id);
 		lock_release(procTableLock);
 	}
-	// lock_acquire(pidLock);
-	//  array_add(reusablePids,&proc->p_id,NULL);
-	// lock_release(pidLock);
 	proc->p_state = PROC_UNUSED_PID;
 #endif // OPT_A2
 
@@ -340,7 +337,7 @@ proc_create_runprogram(const char *name)
 
 #if OPT_A2
 	lock_acquire(pidLock);
-	 proc->p_id = pid_generate();
+	 proc->p_id = pid_gen();
 	lock_release(pidLock);
 
 	if (proc->p_id != PROC_NULL_PID) {
