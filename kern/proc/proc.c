@@ -93,7 +93,7 @@ pid_t pid_gen(void) {
 	else {
 		pid_t *r;
 		if (array_num(reusablePids) == 0) {
-			*r = PROC_NULL_PID;
+			*r = PROC_NO_PID;
 		}
 		else {
 			r = array_get(reusablePids,0);
@@ -135,10 +135,6 @@ proc_create(const char *name)
 	proc->p_cv = cv_create("cvWait");
 	if (proc->p_cv == NULL) {
 		panic("proc_create: failed to create cv for proc");
-	}
-	proc->p_lock = lock_create("procLock");
-	if (proc->p_lock == NULL) {
-		panic("proc_create: failed to create lock for proc");
 	}
 #endif
 
@@ -223,7 +219,7 @@ proc_destroy(struct proc *proc)
 	cv_destroy(proc->p_cv);
 	proc->p_cv = NULL;
 
-	if (proc->p_id != PROC_NULL_PID) {
+	if (proc->p_id != PROC_NO_PID) {
 		 proc_remove_from_table_bypid(proc->p_id);
 	}
 	array_add(reusablePids,&proc->p_id,NULL);
@@ -341,7 +337,7 @@ proc_create_runprogram(const char *name)
 #if OPT_A2
 	int err;
 
-	if (proc->p_id != PROC_NULL_PID) {
+	if (proc->p_id != PROC_NO_PID) {
 		err = proc_add_to_table(proc, "proc_create_runprogram");
 		if (err) {
 			panic("proc_create_runprogram: failed to add proc to procTable");
