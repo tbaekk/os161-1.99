@@ -43,8 +43,9 @@
 #if OPT_A2
 #define PROC_EXITED 0
 #define PROC_RUNNING 1
-#define PROC_NO_PID -1
-#define PROC_UNUSED_PID 2
+#define PROC_NULL_PID -1
+#define PROC_ZOMBIE 2
+#define PROC_UNUSED_PID 3
 
 struct array;
 struct lock;
@@ -82,18 +83,18 @@ struct proc {
 	/* add more material here as needed */
 #if OPT_A2
 	pid_t p_id;
+	pid_t p_pid;
 	int p_state;
 	int p_exitcode;
-	struct proc *p_parentproc;
-	struct cv *p_cv;
 #endif
 };
 
 #if OPT_A2
 extern struct array *procTable;
 extern struct lock *procTableLock;
+extern struct lock *pidLock;
 extern struct array *reusablePids;
-//extern struct cv *cvWait;
+extern struct cv *cvWait;
 #endif
 
 /* This is the process structure for the kernel and for kernel-only threads. */
@@ -127,16 +128,13 @@ struct addrspace *curproc_setas(struct addrspace *);
 
 #if OPT_A2
 /* Generator for Pid */
-pid_t pid_gen(void);
+pid_t pid_generate(void);
 
 /* Fetch the process by pid from the procTable */
 struct proc *proc_get_from_table_bypid(pid_t pid);
 
 /* Remove the process by pid from the procTable */
 void proc_remove_from_table_bypid(pid_t pid);
-
-/* Add process to procTable */
-int proc_add_to_table(struct proc *proc);
 
 #endif /* OPT_A2 */
 

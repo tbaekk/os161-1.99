@@ -55,7 +55,6 @@
 #if OPT_A2
 #include <array.h>
 #include <limits.h>
-#include <kern/wait.h>
 #endif
 
 /*
@@ -76,24 +75,24 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
-pid_t pidCounter = 2;
+pid_t pidCounter = PID_MIN;
 
 #if OPT_A2
 struct array *procTable;
 struct lock *procTableLock;
 struct lock *pidLock;
 struct array *reusablePids;
-//struct cv *cvWait;
+struct cv *cvWait;
 
 /* Generator for Pid */
-pid_t pid_gen(void) {
+pid_t pid_generate(void) {
 	if (pidCounter <= PID_MAX) {
 		return ++pidCounter;
 	}
 	else {
 		pid_t *r;
 		if (array_num(reusablePids) == 0) {
-			*r = PROC_NO_PID;
+			*r = PROC_NULL_PID;
 		}
 		else {
 			r = array_get(reusablePids,0);
@@ -127,15 +126,10 @@ proc_create(const char *name)
 	spinlock_init(&proc->p_lock);
 
 #if OPT_A2
-	proc->p_id = pid_gen();
+	proc->p_id = PROC_NULL_PID;
+	proc->p_pid = PROC_NULL_PID;
 	proc->p_state = PROC_RUNNING;
 	proc->p_exitcode = 0;
-	proc->p_parentproc = NULL;
-
-	proc->p_cv = cv_create("cvWait");
-	if (proc->p_cv == NULL) {
-		panic("proc_create: failed to create cv for proc");
-	}
 #endif
 
 	/* VM fields */
@@ -215,14 +209,15 @@ proc_destroy(struct proc *proc)
 	kfree(proc);
 
 #if OPT_A2
-	proc->p_state = PROC_UNUSED_PID;
-	cv_destroy(proc->p_cv);
-	proc->p_cv = NULL;
-
-	if (proc->p_id != PROC_NO_PID) {
+	if (proc->p_id != PROC_NULL_PID) {
+		lock_acquire(procTableLock);
 		 proc_remove_from_table_bypid(proc->p_id);
+		lock_release(procTableLock);
 	}
-	array_add(reusablePids,&proc->p_id,NULL);
+	lock_acquire(pidLock);
+	 array_add(reusablePids,&proc->p_id,NULL);
+	lock_release(pidLock);
+	proc->p_state = PROC_UNUSED_PID;
 #endif // OPT_A2
 
 #ifdef UW
@@ -275,10 +270,19 @@ proc_bootstrap(void)
   if (procTableLock == NULL) { 
   	panic("failed to create procTableLock\n");
   }
+  // Create lock for proc
+  pidLock = lock_create("pidLock");
+  if (pidLock == NULL) {
+  	panic("failed to create pidLock\n");
+  }
   // Create array for reusable pids
   reusablePids = array_create();
   array_init(reusablePids);
- 
+  // Create cv
+  cvWait = cv_create("cvWait");
+  if (cvWait == NULL) {
+  	panic("failed to create cvWait\n");
+  }
 #endif
 }
 
@@ -335,15 +339,14 @@ proc_create_runprogram(const char *name)
 #endif // UW
 
 #if OPT_A2
-	int err;
+	lock_acquire(pidLock);
+	 proc->p_id = pid_generate();
+	lock_release(pidLock);
 
-	if (proc->p_id != PROC_NO_PID) {
-		err = proc_add_to_table(proc, "proc_create_runprogram");
-		if (err) {
-			panic("proc_create_runprogram: failed to add proc to procTable");
-			proc_destroy(proc);
-			return NULL;
-		}
+	if (proc->p_id != PROC_NULL_PID) {
+		lock_acquire(procTableLock);
+		 array_add(procTable,proc,NULL);
+		lock_release(procTableLock);
 	}
 #endif // OPT_A2
 
@@ -471,7 +474,6 @@ struct proc *proc_get_from_table_bypid(pid_t pid) {
 /* Remove proc from the procTable by pid */
 void proc_remove_from_table_bypid(pid_t pid) {
 	struct proc *tmp;
-	lock_acquire(procTableLock);
 	for (unsigned int i=0; i<array_num(procTable); i++) {
 		tmp = array_get(procTable,i);
 		if (tmp->p_id == pid) {
@@ -479,20 +481,8 @@ void proc_remove_from_table_bypid(pid_t pid) {
 			break;
 		}
 	}
-	lock_release(procTableLock);
+	return;
 }
 
-/* Add newly created process to procTable */
-int proc_add_to_table(struct proc *proc) {
-	int result;
-
-	lock_acquire(procTableLock);
-	result = array_add(procTable,proc,NULL);
-	if (result) {
-		return result;
-	}
-	lock_release(procTableLock);
-	return 0;
-}
 
 #endif
