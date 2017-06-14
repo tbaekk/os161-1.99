@@ -43,9 +43,8 @@
 #if OPT_A2
 #define PROC_EXITED 0
 #define PROC_RUNNING 1
-#define PROC_NULL_PID -1
-#define PROC_ZOMBIE 2
-#define PROC_UNUSED_PID 3
+#define PROC_NO_PID -1
+#define PROC_UNUSED_PID 2
 
 struct array;
 struct lock;
@@ -86,14 +85,13 @@ struct proc {
 	int p_state;
 	int p_exitcode;
 	struct proc *p_parentproc;
-	struct cv* p_cv;
+	struct cv *p_cv;
 #endif
 };
 
 #if OPT_A2
 extern struct array *procTable;
 extern struct lock *procTableLock;
-extern struct lock *pidLock;
 extern struct array *reusablePids;
 //extern struct cv *cvWait;
 #endif
@@ -129,7 +127,7 @@ struct addrspace *curproc_setas(struct addrspace *);
 
 #if OPT_A2
 /* Generator for Pid */
-pid_t pid_generate(void);
+pid_t pid_gen(void);
 
 /* Fetch the process by pid from the procTable */
 struct proc *proc_get_from_table_bypid(pid_t pid);
@@ -137,10 +135,8 @@ struct proc *proc_get_from_table_bypid(pid_t pid);
 /* Remove the process by pid from the procTable */
 void proc_remove_from_table_bypid(pid_t pid);
 
-void proc_wait_exit(struct proc* proc);
-
-/* exit as zombie and let the parent know by broadcasting */
-void proc_exitas_zombie(struct proc* proc, int exitcode);
+/* Add process to procTable */
+int proc_add_to_table(struct proc *proc);
 
 #endif /* OPT_A2 */
 

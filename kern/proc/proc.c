@@ -76,7 +76,7 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
-pid_t pidCounter = PID_MIN;
+pid_t pidCounter = 2;
 
 #if OPT_A2
 struct array *procTable;
@@ -86,7 +86,7 @@ struct array *reusablePids;
 //struct cv *cvWait;
 
 /* Generator for Pid */
-pid_t pid_generate(void) {
+pid_t pid_gen(void) {
 	if (pidCounter <= PID_MAX) {
 		return ++pidCounter;
 	}
@@ -127,11 +127,19 @@ proc_create(const char *name)
 	spinlock_init(&proc->p_lock);
 
 #if OPT_A2
-	proc->p_id = PROC_NULL_PID;
+	proc->p_id = pid_gen();
 	proc->p_state = PROC_RUNNING;
 	proc->p_exitcode = 0;
-	proc->p_cv = NULL;
 	proc->p_parentproc = NULL;
+
+	proc->p_cv = cv_create("cvWait");
+	if (proc->p_cv == NULL) {
+		panic("proc_create: failed to create cv for proc");
+	}
+	proc->p_lock = lock_create("procLock");
+	if (proc->p_lock == NULL) {
+		panic("proc_create: failed to create lock for proc");
+	}
 #endif
 
 	/* VM fields */
@@ -211,18 +219,14 @@ proc_destroy(struct proc *proc)
 	kfree(proc);
 
 #if OPT_A2
-	if (proc->p_id != PROC_NULL_PID) {
-		lock_acquire(procTableLock);
-		 proc_remove_from_table_bypid(proc->p_id);
-		lock_release(procTableLock);
-	}
-	lock_acquire(pidLock);
-	 array_add(reusablePids,&proc->p_id,NULL);
-	lock_release(pidLock);
-	
 	proc->p_state = PROC_UNUSED_PID;
 	cv_destroy(proc->p_cv);
 	proc->p_cv = NULL;
+
+	if (proc->p_id != PROC_NULL_PID) {
+		 proc_remove_from_table_bypid(proc->p_id);
+	}
+	array_add(reusablePids,&proc->p_id,NULL);
 #endif // OPT_A2
 
 #ifdef UW
@@ -275,19 +279,10 @@ proc_bootstrap(void)
   if (procTableLock == NULL) { 
   	panic("failed to create procTableLock\n");
   }
-  // Create lock for proc
-  pidLock = lock_create("pidLock");
-  if (pidLock == NULL) {
-  	panic("failed to create pidLock\n");
-  }
   // Create array for reusable pids
   reusablePids = array_create();
   array_init(reusablePids);
-  // Create cv
-  // cvWait = cv_create("cvWait");
-  // if (cvWait == NULL) {
-  // 	panic("failed to create cvWait\n");
-  // }
+ 
 #endif
 }
 
@@ -344,22 +339,15 @@ proc_create_runprogram(const char *name)
 #endif // UW
 
 #if OPT_A2
-	lock_acquire(pidLock);
-	 proc->p_id = pid_generate();
-	lock_release(pidLock);
-
-	struct cv *cvWait = cv_create("cvWait");
-	if (cvWait == NULL) {
-		panic("failed to create cv for proc");
-		proc_destroy(proc);
-		return NULL;
-	}
-	proc->p_cv = cvWait;
+	int err;
 
 	if (proc->p_id != PROC_NULL_PID) {
-		lock_acquire(procTableLock);
-		 array_add(procTable,proc,NULL);
-		lock_release(procTableLock);
+		err = proc_add_to_table(proc, "proc_create_runprogram");
+		if (err) {
+			panic("proc_create_runprogram: failed to add proc to procTable");
+			proc_destroy(proc);
+			return NULL;
+		}
 	}
 #endif // OPT_A2
 
@@ -487,6 +475,7 @@ struct proc *proc_get_from_table_bypid(pid_t pid) {
 /* Remove proc from the procTable by pid */
 void proc_remove_from_table_bypid(pid_t pid) {
 	struct proc *tmp;
+	lock_acquire(procTableLock);
 	for (unsigned int i=0; i<array_num(procTable); i++) {
 		tmp = array_get(procTable,i);
 		if (tmp->p_id == pid) {
@@ -494,29 +483,20 @@ void proc_remove_from_table_bypid(pid_t pid) {
 			break;
 		}
 	}
-	return;
+	lock_release(procTableLock);
 }
 
-/* wait while the proc is running */
-void
-proc_wait_exit(struct proc* proc)
-{
-	lock_acquire(pidLock);
-	while(proc->p_state == RUNNING){
-		cv_wait(proc->p_cv, pidLock);
+/* Add newly created process to procTable */
+int proc_add_to_table(struct proc *proc) {
+	int result;
+
+	lock_acquire(procTableLock);
+	result = array_add(procTable,proc,NULL);
+	if (result) {
+		return result;
 	}
-	lock_release(pidLock);
-}
-
-/* exit as zombie and let the parent know by broadcasting */
-void
-proc_exitas_zombie(struct proc* p, int exitcode)
-{
-	lock_acquire(pidLock);
-	p->p_state = ZOMBIE;
-	p->p_exitcode = _MKWAIT_EXIT(exitcode);
-	cv_broadcast(p->p_cv,pidLock);
-	lock_release(pidLock);
+	lock_release(procTableLock);
+	return 0;
 }
 
 #endif

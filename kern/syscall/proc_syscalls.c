@@ -21,16 +21,9 @@
 void sys__exit(int exitcode) {
 
   struct addrspace *as;
-
-
   struct proc *p = curproc;
   /* for now, just include this to keep the compiler from complaining about
      an unused variable */
-#if OPT_A2
-  // struct proc* child;
-#else
-  (void)exitcode;
-#endif // OPT_A2
 
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
 
@@ -49,28 +42,16 @@ void sys__exit(int exitcode) {
   /* detach this thread from its process */
   /* note: curproc cannot be used after this call */
   proc_remthread(curthread);
+
 #if OPT_A2
-  // let the parent know that I(child) have exited with the exitcode
-  // exited but not cleaned up - ZOMBIE
-  proc_exitas_zombie(p, exitcode);
-
-  // wait for each running child to finish
-  // for (unsigned int i=0; i<array_num(proc_table); ++i){
-  //   child = array_get(proc_table, i);
-  //   if (child->p_parent == p && child->p_state == RUNNING){
-  //     proc_wait_exit(child);
-  //   }
-  // }
-
-  // wait for the parent to finish, if it has parent
-  if (p->p_parentproc){
-    proc_wait_exit(p->p_parentproc);
-  }
-
-  // Now its pid can be recycled
-  // remove from proc table and add to recyclebin
-  // these are added to proc_destroy
-#endif // OPT_A2
+  lock_acquire(procTableLock);
+  p->p_exitcode = _MKWAIT_EXIT(exitcode);
+  p->p_state = PROC_EXITED;
+  cv_broadcast(p->p_cv, procTableLock);
+  lock_release(procTableLock);
+#else
+  (void)exitcode;
+#endif
 
   /* if this is the last user process in the system, proc_destroy()
      will wake up the kernel menu thread */
@@ -89,6 +70,7 @@ sys_getpid(pid_t *retval)
   /* for now, this is just a stub that always returns a PID of 1 */
   /* you need to fix this to make it work properly */
 #if OPT_A2
+  KASSERT(curproc != NULL);
   *retval = curproc->p_id;
 #else
   *retval = 1;
@@ -115,13 +97,18 @@ sys_waitpid(pid_t pid,
 
      Fix this!
   */
+
+  if (options != 0) {
+    return(EINVAL);
+  }
+
 #if OPT_A2
   
-  struct proc *parentProc;
-  struct proc *childProc;
+  struct proc *parentProc = curproc;
+  
 
   lock_acquire(procTableLock);
-  childProc = proc_get_from_table_bypid(pid);
+  struct proc *childProc = proc_get_from_table_bypid(pid);
 
   if (childProc == NULL) {
     DEBUG(DB_SYSCALL, "sys_waitpid: Failed to fetch child process.\n");
@@ -129,19 +116,11 @@ sys_waitpid(pid_t pid,
     return ESRCH;
   }
 
-  parentProc = curproc;
-
   if (childProc->p_parentproc != parentProc) {
     DEBUG(DB_SYSCALL, "sys_waitpid: No related child process.\n");
     return ECHILD;
   }
-#endif
 
-  if (options != 0) {
-    return(EINVAL);
-  }
-
-#if OPT_A2
   while(childProc->p_state == PROC_RUNNING) {
     cv_wait(childProc->p_cv, procTableLock);
   }
@@ -182,11 +161,6 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
 
 
   // Create and copy address space (and data) from parent to child
-  struct addrspace *parentAddrs = curproc_getas();
-  if (parentAddrs == NULL) {
-    DEBUG(DB_SYSCALL, "sys_fork: No address space setup.\n");
-    return EFAULT;
-  }
   struct addrspace *childAddrs = as_create();
   if (childAddrs == NULL) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create addrspace for new process.\n");
@@ -194,7 +168,7 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
     proc_destroy(childProc);
     return ENOMEM;
   }
-  result = as_copy(parentAddrs, &childAddrs);
+  result = as_copy(parentProc->p_addrspace, &childAddrs);
   if (result) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to copy addrspace to new process.\n");
     proc_destroy(childProc);
@@ -203,9 +177,7 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   }
 
   // Attach the newly created address space to the child process structure
-  spinlock_acquire(&childProc->p_lock);
-   childProc->p_addrspace = childAddrs;
-  spinlock_release(&childProc->p_lock);
+  childProc->p_addrspace = childAddrs;
   DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n");
 
 
@@ -227,12 +199,12 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   memcpy(ctf,ptf, sizeof(struct trapframe));
   DEBUG(DB_SYSCALL, "sys_fork: Created new trapframe\n");
 
-  result = thread_fork(curthread->t_name, childProc, enter_forked_process, ctf, 1);
+  result = thread_fork(curthread->t_name, childProc, enter_forked_process, ctf, 0);
   if (result) {
     DEBUG(DB_SYSCALL, "sys_fork: Failed to create new thread from thread_fork\n");
-    proc_destroy(childProc);
     kfree(ctf);
-    ctf = NULL;
+    as_destroy(childAddrs);
+    proc_destroy(childProc);
     return result;
   }
   DEBUG(DB_SYSCALL, "sys_fork: Created new fork thread\n");
