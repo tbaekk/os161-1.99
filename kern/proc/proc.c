@@ -214,9 +214,9 @@ proc_destroy(struct proc *proc)
 		 proc_remove_from_table_bypid(proc->p_id);
 		lock_release(procTableLock);
 	}
-	lock_acquire(pidLock);
-	 array_add(reusablePids,&proc->p_id,NULL);
-	lock_release(pidLock);
+	// lock_acquire(pidLock);
+	//  array_add(reusablePids,&proc->p_id,NULL);
+	// lock_release(pidLock);
 	proc->p_state = PROC_UNUSED_PID;
 #endif // OPT_A2
 
@@ -246,17 +246,17 @@ proc_bootstrap(void)
 {
   kproc = proc_create("[kernel]");
   if (kproc == NULL) {
-    panic("proc_create for kproc failed\n");
+    panic("proc_bootstrap: proc_create for kproc failed\n");
   }
 #ifdef UW
   proc_count = 0;
   proc_count_mutex = sem_create("proc_count_mutex",1);
   if (proc_count_mutex == NULL) {
-    panic("could not create proc_count_mutex semaphore\n");
+    panic("proc_bootstrap: could not create proc_count_mutex semaphore\n");
   }
   no_proc_sem = sem_create("no_proc_sem",0);
   if (no_proc_sem == NULL) {
-    panic("could not create no_proc_sem semaphore\n");
+    panic("proc_bootstrap: could not create no_proc_sem semaphore\n");
   }
 #endif // UW 
 
@@ -268,12 +268,12 @@ proc_bootstrap(void)
   // Create lock for procTable
   procTableLock = lock_create("procTableLock");
   if (procTableLock == NULL) { 
-  	panic("failed to create procTableLock\n");
+  	panic("proc_bootstrap: failed to create procTableLock\n");
   }
   // Create lock for proc
   pidLock = lock_create("pidLock");
   if (pidLock == NULL) {
-  	panic("failed to create pidLock\n");
+  	panic("proc_bootstrap: failed to create pidLock\n");
   }
   // Create array for reusable pids
   reusablePids = array_create();
@@ -281,7 +281,7 @@ proc_bootstrap(void)
   // Create cv
   cvWait = cv_create("cvWait");
   if (cvWait == NULL) {
-  	panic("failed to create cvWait\n");
+  	panic("proc_bootstrap: failed to create cvWait\n");
   }
 #endif
 }
@@ -307,10 +307,10 @@ proc_create_runprogram(const char *name)
 	/* open the console - this should always succeed */
 	console_path = kstrdup("con:");
 	if (console_path == NULL) {
-	  panic("unable to copy console path name during process creation\n");
+	  panic("proc_create_runprogram: unable to copy console path name during process creation\n");
 	}
 	if (vfs_open(console_path,O_WRONLY,0,&(proc->console))) {
-	  panic("unable to open the console during process creation\n");
+	  panic("proc_create_runprogram: unable to open the console during process creation\n");
 	}
 	kfree(console_path);
 #endif // UW
