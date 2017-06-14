@@ -196,9 +196,9 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   }
 
   // Attach the newly created address space to the child process structure
-  // spinlock_acquire(&childProc->p_lock);
-  //  childProc->p_addrspace = childAddrs;
-  // spinlock_release(&childProc->p_lock);
+  spinlock_acquire(&childProc->p_lock);
+   childProc->p_addrspace = childAddrs;
+  spinlock_release(&childProc->p_lock);
   // DEBUG(DB_SYSCALL, "sys_fork: Created addrspace and copied to new process.\n");
 
 
