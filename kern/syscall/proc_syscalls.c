@@ -18,6 +18,8 @@
 #include <vfs.h>
 #include <kern/fcntl.h>
 #include <limits.h>
+
+void args_clean(char **args, long idx);
 #endif
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -308,7 +310,7 @@ int sys_execv(const userptr_t program, userptr_t args) {
   }
 
   /* We should be a new process. */
-  KASSERT(curproc_getas() == NULL);
+  //KASSERT(curproc_getas() == NULL);
 
   /* Create a new address space. */
   as = as_create();
@@ -353,7 +355,7 @@ int sys_execv(const userptr_t program, userptr_t args) {
   // Copy args strings onto stack
   size_t adjust = 0;
   vaddr_t argsptr[num+1];
-  argsptr[num] = NULL;
+  argsptr[num] = 0;
   for (int i = num - 1; i >= 0; i--) {
     adjust = strlen(kargs[i]) + 1;
     result = copyoutstr(kargs[i], (userptr_t)stackptr-adjust, adjust, NULL);

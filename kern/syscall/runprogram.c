@@ -53,6 +53,8 @@
  * Calls vfs_open on progname and thus may destroy it.
  */
 #if OPT_A2
+#include <copyinout.h>
+
 int runprogram(char *progname, char **args, unsigned long nargs)
 #else
 int
@@ -105,11 +107,11 @@ runprogram(char *progname)
 #if OPT_A2
 	// Copy args strings onto stack
 	size_t adjust = 0;
-	vaddr_t argsptr[num+1];
-	argsptr[num] = NULL;
+	vaddr_t argsptr[nargs+1];
+	argsptr[nargs] = 0;
 	for (int i = nargs - 1; i >= 0; i--) {
-		adjust = strlen(kargs[i]) + 1;
-	    result = copyoutstr(kargs[i], (userptr_t)stackptr-adjust, adjust, NULL);
+		adjust = strlen(args[i]) + 1;
+	    result = copyoutstr(args[i], (userptr_t)stackptr-adjust, adjust, NULL);
 	    if (result) {
 	      return result;
 	    }
@@ -125,7 +127,7 @@ runprogram(char *progname)
          return result;
         }
     }
-
+    enter_new_process(nargs,(userptr_t)stackptr,stackptr,entrypoint);
 #else
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
