@@ -14,6 +14,10 @@
 
 #if OPT_A2
 #include <mips/trapframe.h>
+// a2b
+#include <vfs.h>
+#include <kern/fcntl.h>
+#include <limits.h>
 #endif
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -235,4 +239,154 @@ int sys_fork(struct trapframe *ptf, pid_t *retval) {
   return 0;
 
 }
+
+void args_clean(char **args, long idx) {
+  for (int i = 0; i < idx; i++) {
+    kfree(args[i]);
+  }
+}
+
+int sys_execv(const userptr_t program, userptr_t args) {
+  int result;
+  struct addrspace *as;
+  struct vnode *v;
+  vaddr_t entrypoint, stackptr;
+  char *kprogram;
+  char **kargs;
+
+  // Chck if program is empty
+  if (program == NULL){
+    DEBUG(DB_SYSCALL, "sys_execv: NULL program\n");
+    return EFAULT;
+  }
+
+  // Count the number of arguments 
+  size_t args_num = 0;
+  int num=0;
+  for(;((char**)args)[num]!=NULL;num++){
+    args_num += strlen(((char**)args)[num]);
+  }
+  if (args_num > ARG_MAX) return E2BIG;
+
+  // Copy the program into the kernel
+  int len = strlen((char*)program) + 1;
+  kprogram = kmalloc(sizeof(char) * len);
+  if (kprogram == NULL)return ENOMEM;
+  
+  result = copyinstr(program, kprogram, len, NULL);
+  if (result) {
+    kfree(kprogram);
+    return result;
+  } 
+
+  // Copy the argumens into the kernel
+  kargs = kmalloc(sizeof(char*) * (num + 1));
+  if (kargs == NULL) return ENOMEM;
+
+  for (int i = 0; i < num; ++i) {
+    kargs[i] = kmalloc(sizeof(char) * (strlen(((char**)args)[i]) + 1));
+    if (kargs[i] == NULL) {
+      args_clean(kargs,i);
+      kfree(kargs);
+      return ENOMEM;
+    }
+    result = copyinstr((userptr_t)((char**)args)[i], kargs[i], strlen(((char**)args)[i])+1, NULL);
+    if (result) {
+      args_clean(kargs,i);
+      kfree(kargs);
+      return result;
+    }
+  }
+
+  /* Open the file. */
+  result = vfs_open((char*)program, O_RDONLY, 0, &v);
+  if (result) {
+    args_clean(kargs, num);
+    kfree(kargs);
+    kfree(kprogram);
+    return result;
+  }
+
+  /* We should be a new process. */
+  KASSERT(curproc_getas() == NULL);
+
+  /* Create a new address space. */
+  as = as_create();
+  if (as == NULL) {
+    args_clean(kargs,num);
+    kfree(kargs);
+    kfree(kprogram);
+    vfs_close(v);
+    return ENOMEM;
+  }
+
+  /* Switch to it and activate it. */
+  struct addrspace *oldas = curproc_setas(as);
+  as_activate();
+
+  /* Load the executable. */
+  result = load_elf(v, &entrypoint);
+  if (result) {
+    /* p_addrspace will go away when curproc is destroyed */
+    args_clean(kargs,num);
+    kfree(kargs);
+    kfree(kprogram);
+    vfs_close(v);
+    curproc_setas(oldas);
+    return result;
+  }
+
+  /* Done with the file now. */
+  vfs_close(v);
+
+  /* Define the user stack in the address space */
+  result = as_define_stack(as, &stackptr);
+  if (result) {
+    /* p_addrspace will go away when curproc is destroyed */
+    args_clean(kargs,num);
+    kfree(kargs);
+    kfree(kprogram);
+    curproc_setas(oldas);
+    return result;
+  }
+
+  // Copy args strings onto stack
+  size_t adjust = 0;
+  vaddr_t argsptr[num+1];
+  argsptr[num] = NULL;
+  for (int i = num - 1; i >= 0; i--) {
+    adjust = strlen(kargs[i]) + 1;
+    result = copyoutstr(kargs[i], (userptr_t)stackptr-adjust, adjust, NULL);
+    if (result) {
+      args_clean(kargs,num);
+      kfree(kargs);
+      kfree(kprogram);
+      curproc_setas(oldas);
+      return result;
+    }
+    stackptr -= adjust;
+    argsptr[i] = stackptr;
+  }
+
+  stackptr = ROUNDUP(stackptr-4, 4);
+  for (int i = num; i >= 0; i--) {
+    stackptr -= 4;
+    result = copyout(&argsptr[i], (userptr_t)stackptr, sizeof(&argsptr[i]));
+     if (result) {
+      args_clean(kargs,num);
+      kfree(kargs);
+      kfree(kprogram);
+      curproc_setas(oldas);
+      return result;
+    }
+  }
+
+  kfree(oldas);
+
+  enter_new_process(num, (userptr_t)stackptr, stackptr, entrypoint);
+  /* enter_new_process does not return. */
+  panic("enter_new_process returned\n");
+  return EINVAL;
+}
+
 #endif

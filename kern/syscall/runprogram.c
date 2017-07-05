@@ -44,6 +44,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include "opt-A2.h"
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -51,8 +52,12 @@
  *
  * Calls vfs_open on progname and thus may destroy it.
  */
+#if OPT_A2
+int runprogram(char *progname, char **args, unsigned long nargs)
+#else
 int
 runprogram(char *progname)
+#endif
 {
 	struct addrspace *as;
 	struct vnode *v;
@@ -97,10 +102,35 @@ runprogram(char *progname)
 		return result;
 	}
 
+#if OPT_A2
+	// Copy args strings onto stack
+	size_t adjust = 0;
+	vaddr_t argsptr[num+1];
+	argsptr[num] = NULL;
+	for (int i = nargs - 1; i >= 0; i--) {
+		adjust = strlen(kargs[i]) + 1;
+	    result = copyoutstr(kargs[i], (userptr_t)stackptr-adjust, adjust, NULL);
+	    if (result) {
+	      return result;
+	    }
+	    stackptr -= adjust;
+	    argsptr[i] = stackptr;
+	  }
+
+  	stackptr = ROUNDUP(stackptr-4, 4);
+  	for (int i = nargs; i >= 0; i--) {
+    	stackptr -= 4;
+    	result = copyout(&argsptr[i], (userptr_t)stackptr, sizeof(&argsptr[i]));
+     	if (result) {
+         return result;
+        }
+    }
+
+#else
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  stackptr, entrypoint);
-	
+#endif
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;
