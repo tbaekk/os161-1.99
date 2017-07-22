@@ -93,6 +93,10 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 		sig = SIGABRT;
 		break;
 	    case EX_MOD:
+#if OPT_A3
+	    sig = SIGSEGV;
+	    sys__exit(sig,false);
+#endif
 	    case EX_TLBL:
 	    case EX_TLBS:
 		sig = SIGSEGV;
@@ -120,6 +124,8 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	 */
 #if OPT_A3
 	if (sig == SIGSEGV && code == EX_MOD){
+		//(void)epc;
+		//(void)vaddr;
 		struct addrspace *as;
 		struct proc *p = curproc;
 		as_deactivate();

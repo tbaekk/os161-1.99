@@ -10,7 +10,9 @@
 #include <addrspace.h>
 #include <copyinout.h>
 #include <synch.h>
+
 #include "opt-A2.h"
+#include "opt-A3.h"
 
 #if OPT_A2
 #include <mips/trapframe.h>
@@ -24,8 +26,12 @@ void args_clean(char **args, long idx);
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
 
-void sys__exit(int exitcode) {
-
+#if OPT_A3
+void sys__exit(int exitcode, bool syscall_safe)
+#else
+void sys__exit(int exitcode)
+#endif
+  {
   struct addrspace *as;
   struct proc *p = curproc;
   /* for now, just include this to keep the compiler from complaining about
@@ -54,7 +60,16 @@ void sys__exit(int exitcode) {
   //struct proc *cproc = proc_get_from_table_bypid(p->p_id);
   if (p->p_id != PROC_NULL_PID) {
     p->p_state = PROC_ZOMBIE;
+#if OPT_A3
+    if (syscall_safe) {
+      p->p_exitcode = _MKWAIT_EXIT(exitcode);
+    }
+    else {
+      p->p_exitcode = _MKWAIT_SIG(exitcode);
+    }
+#else
     p->p_exitcode = _MKWAIT_EXIT(exitcode);
+#endif
     cv_broadcast(cvWait, procTableLock);
   }
   else {

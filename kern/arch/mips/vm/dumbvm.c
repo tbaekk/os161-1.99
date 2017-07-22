@@ -203,7 +203,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 #if OPT_A3
 		if ((faultaddress >= vbase1 && faultaddress < vtop1) && (as->as_complete)){
-			elo &= ~TLBO_DIRTY;
+			elo &= ~TLBLO_DIRTY;
 		}
 #endif
 
