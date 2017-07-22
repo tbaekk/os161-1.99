@@ -38,6 +38,8 @@
 #include <addrspace.h>
 #include <vm.h>
 
+#include "opt-A3.h"
+
 /*
  * Dumb MIPS-only "VM system" that is intended to only be just barely
  * enough to struggle off the ground.
@@ -120,8 +122,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:
+#if OPT_A3
+	    return EROFS;
+#else
 		/* We always create pages read-write, so we can't get this */
 		panic("dumbvm: got VM_FAULT_READONLY\n");
+#endif
 	    case VM_FAULT_READ:
 	    case VM_FAULT_WRITE:
 		break;
@@ -194,15 +200,39 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 		ehi = faultaddress;
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
+
+#if OPT_A3
+		if ((faultaddress >= vbase1 && faultaddress < vtop1) && (as->as_complete)){
+			elo &= ~TLBO_DIRTY;
+		}
+#endif
+
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 		tlb_write(ehi, elo, i);
 		splx(spl);
 		return 0;
 	}
 
+#if OPT_A3
+	/* 
+		Handling a Full TLB.
+		Overwrite one of the existing entries with the new entry to prevent TLB overload
+	*/
+	ehi = faultaddress;
+	elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
+	
+	if ((faultaddress >= vbase1 && faultaddress < vtop1) && (as->as_complete)){
+		elo &= ~TLBLO_DIRTY;
+	}
+	// Allow the hardware to choose a random entry to be overwritten
+	tlb_random(ehi, elo);	
+	splx(spl);
+	return 0;
+#else
 	kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 	return EFAULT;
+#endif
 }
 
 struct addrspace *
@@ -220,6 +250,9 @@ as_create(void)
 	as->as_pbase2 = 0;
 	as->as_npages2 = 0;
 	as->as_stackpbase = 0;
+#if OPT_A3
+	as->as_complete = 0;
+#endif
 
 	return as;
 }
@@ -338,7 +371,11 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
+#if OPT_A3
+	as->as_complete = 1;
+#else
 	(void)as;
+#endif
 	return 0;
 }
 

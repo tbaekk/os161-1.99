@@ -36,6 +36,7 @@
 
 
 #include <vm.h>
+#include "opt_A3.h"
 
 struct vnode;
 
@@ -55,6 +56,9 @@ struct addrspace {
   paddr_t as_pbase2;
   size_t as_npages2;
   paddr_t as_stackpbase;
+#if OPT_A3
+  int as_complete;
+#endif
 };
 
 /*
