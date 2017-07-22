@@ -30,6 +30,7 @@
 #ifndef _MIPS_VM_H_
 #define _MIPS_VM_H_
 
+#include "opt-A3.h"
 
 /*
  * Machine-dependent VM system definitions.
@@ -101,6 +102,14 @@
 void ram_bootstrap(void);
 paddr_t ram_stealmem(unsigned long npages);
 void ram_getsize(paddr_t *lo, paddr_t *hi);
+#if OPT_A3
+struct coremap {
+	paddr_t framestart;
+	bool is_used;
+	bool contiguous;
+};
+paddr_t ram_getmem(struct coremap *coremap, const int &total_frames, unsigned long npages);
+#endif
 
 /*
  * TLB shootdown bits.

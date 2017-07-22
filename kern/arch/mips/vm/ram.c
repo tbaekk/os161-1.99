@@ -32,6 +32,7 @@
 #include <vm.h>
 #include <mainbus.h>
 
+#include "opt-A3.h"
 
 vaddr_t firstfree;   /* first free virtual address; set by start.S */
 
@@ -108,6 +109,50 @@ ram_stealmem(unsigned long npages)
 
 	return paddr;
 }
+
+
+#if OPT_A3
+paddr_t ram_getmem(struct coremap *coremap, const int total_frames, unsigned long npages) {
+	int pages = (int) npages;
+	int num_unused = 0;
+	int start = -1;
+	bool found_block = false;
+
+	for (int i = 0; i < total_frames; ++i) {
+		if (found_block) break;
+
+		if (!coremap[i].is_used) {
+			if (start < 0) {
+				start = i;
+			}
+			num_unused++;
+			if (num_unused == pages) {
+				found_block = true;
+			}
+		}
+		else {
+			num_unused = 0;
+			start = -1;	
+		}
+	}
+
+	paddr_t paddr = 0;
+	if (found_block) {
+		paddr = coremap[start].framestart;
+		for (int i = 0; i < pages; ++i) {
+ 			coremap[start + i].is_used = true;
+ 			if(i == pages - 1){
+ 				coremap[start+i].contiguous = false;
+ 			}
+ 			else {
+ 				coremap[start+i].contiguous = true;
+ 			}
+ 		}
+	}
+
+	return paddr;
+}
+#endif
 
 /*
  * This function is intended to be called by the VM system when it

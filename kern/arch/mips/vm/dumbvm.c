@@ -53,9 +53,43 @@
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
+#if OPT_A3
+struct coremap *coremap;
+bool is_coremapped = false;
+int total_frames;
+#endif
+
 void
 vm_bootstrap(void)
 {
+#if OPT_A3
+	paddr_t low, high;
+
+	// Get remaining memory
+	ram_getsize(&low, &high);
+
+	coremap = (struct coremap *) PADDR_TO_KVADDR(low);
+
+	// Find necessary space for coremap
+	int total_size = high - low;
+	total_frames = total_size / PAGE_SIZE;
+
+	low += total_frames * sizeof(struct coremap);
+	while (low % PAGE_SIZE != 0) {
+		low += 1;
+	}
+	total_frames = (high - low) / PAGE_SIZE;
+
+	paddr_t start = low;
+	for (int i = 0; i < total_frames; i++) {
+		coremap[i].framestart = start;
+		coremap[i].is_used = false;
+		coremap[i].contiguous = false;
+		start += PAGE_SIZE;
+	}
+
+	is_coremapped = true;
+#endif
 	/* Do nothing. */
 }
 
@@ -67,8 +101,17 @@ getppages(unsigned long npages)
 
 	spinlock_acquire(&stealmem_lock);
 
+#if OPT_A3
+	if (is_coremapped) {
+		addr = ram_getmem(coremap, total_frames, npages);
+	}
+	else {
+		addr = ram_stealmem(npages);
+	}
+#else
 	addr = ram_stealmem(npages);
-	
+#endif
+
 	spinlock_release(&stealmem_lock);
 	return addr;
 }
@@ -89,8 +132,47 @@ void
 free_kpages(vaddr_t addr)
 {
 	/* nothing - leak the memory. */
+#if OPT_A3
+	spinlock_acquire(&stealmem_lock);
+	if (is_coremapped) {
+		if (!addr) {
+			spinlock_release(&stealmem_lock);
+			kprintf("Error: something occured from free_kpages\n");
+			return;
+		}
 
+		int pos_found = -1;
+		// Find the addrs position to free
+		for (int i = 0; i < total_frames; i++) {
+			if (coremap[i].framestart == addr) {
+				pos_found = i;
+				break;
+			}
+		}
+
+		if (pos_found < 0) {
+			spinlock_release(&stealmem_lock);
+			kprintf("Error: unable to find the addrs to free from coremap");
+			return;
+		}
+		
+		int i;
+		for (i = pos_found; i < total_frames; i++) {
+			if (!coremap[i].contiguous) {
+				break;
+			} else {
+				coremap[i].is_used = false;
+				coremap[i].contiguous = false;
+			}
+		}
+		coremap[i].is_used = false;
+	}
+	spinlock_release(&stealmem_lock);
+
+	return;
+#else	
 	(void)addr;
+#endif
 }
 
 void
@@ -255,6 +337,11 @@ as_create(void)
 void
 as_destroy(struct addrspace *as)
 {
+#if OPT_A3
+	free_kpages(PADDR_TO_KVADDR(as->as_pbase1));
+	free_kpages(PADDR_TO_KVADDR(as->as_pbase2));
+	free_kpages(PADDR_TO_KVADDR(as->as_stackpbase));
+#endif
 	kfree(as);
 }
 
@@ -368,6 +455,7 @@ as_complete_load(struct addrspace *as)
 {
 #if OPT_A3
 	as->as_complete = 1;
+	as_activate();
 #else
 	(void)as;
 #endif
