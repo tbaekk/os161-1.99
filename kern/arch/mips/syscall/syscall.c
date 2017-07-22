@@ -119,7 +119,11 @@ syscall(struct trapframe *tf)
 		err = sys_fork(tf,(pid_t *)&retval);
 		break;
 	case SYS__exit:
+#if OPT_A3
+	  sys__exit((int)tf->tf_a0, true);
+#else
 	  sys__exit((int)tf->tf_a0);
+#endif
 	  /* sys__exit does not return, execution should not get here */
 	  panic("unexpected return from sys__exit");
 	  break;
