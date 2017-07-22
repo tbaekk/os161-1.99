@@ -108,7 +108,7 @@ struct coremap {
 	bool is_used;
 	bool contiguous;
 };
-paddr_t ram_getmem(struct coremap *coremap, const int &total_frames, unsigned long npages);
+paddr_t ram_getmem(struct coremap *coremap, const int total_frames, unsigned long npages);
 #endif
 
 /*

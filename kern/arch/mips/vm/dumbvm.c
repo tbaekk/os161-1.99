@@ -142,9 +142,10 @@ free_kpages(vaddr_t addr)
 		}
 
 		int pos_found = -1;
+		paddr_t paddr = addr - MIPS_KSEG0;
 		// Find the addrs position to free
 		for (int i = 0; i < total_frames; i++) {
-			if (coremap[i].framestart == addr) {
+			if (coremap[i].framestart == paddr) {
 				pos_found = i;
 				break;
 			}
@@ -152,7 +153,7 @@ free_kpages(vaddr_t addr)
 
 		if (pos_found < 0) {
 			spinlock_release(&stealmem_lock);
-			kprintf("Error: unable to find the addrs to free from coremap");
+			kprintf("Error: unable to find the addrs to free from coremap\n");
 			return;
 		}
 		
