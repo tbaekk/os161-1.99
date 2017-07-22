@@ -31,7 +31,7 @@ void sys__exit(int exitcode, bool syscall_safe)
 #else
 void sys__exit(int exitcode)
 #endif
-  {
+{
   struct addrspace *as;
   struct proc *p = curproc;
   /* for now, just include this to keep the compiler from complaining about
